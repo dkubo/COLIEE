@@ -1,0 +1,5 @@
+/data/
+/src/fastText/
+/result/hanreiWakati.txt
+/result/hanrei.model.wv.syn0.npy
+/result/hanrei.model.syn1neg.npy
