@@ -15,7 +15,7 @@ def getData(fpath, data):
 		})
 	return data
 
-# split the paragraph to sentences
+# Split the paragraph into sentences
 def split2sentence(paragraph):
 	res, sensp, merge = [], [], ""
 	opencnt, closecnt = 0, 0
@@ -45,7 +45,7 @@ def getCivilCode():
 			jomatch = re.search(r'^第[〇一二三四五六七八九十百千]{1,6}条　', line)
 			# 「漢数字 」は，条件の箇条書き→条文本文の続き?
 			# 「英数字 」は，～条の～のやつ
-			jomatch = re.search(r'^第[〇一二三四五六七八九十百千]{1,6}条　', line)
+			jomatch = re.search(r'^[０-９]{1,2}　', line)
 			if res:
 				span = res.span()
 				# print("---------------------")
