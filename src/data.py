@@ -3,20 +3,44 @@
 from xml.etree import ElementTree as ET
 from collections import Counter
 import re
+import pickle
+
+# Save or Load the pickle file
+def pickleFunc(fname, senthash, type):
+	if type == "save":
+		with open(fname, mode='wb') as f:
+			pickle.dump(senthash, f)
+	elif type == "load":
+		with open(fname, mode='rb') as f:
+			return pickle.load(f)
+
+# H27だけデータの前処理が必要
+def forH26_H27(subtree):
+	modified = ""
+	for line in subtree.findtext("t2").split("\n")[1:]:
+		matchOB = re.search(r'(。（解答欄は，［|問〕（|までの各記述)', line)
+		if not matchOB:
+			modified += line[2:]
+	return modified
 
 # Get the Task Data
 def getData(fpath, data):
 	for subtree in ET.parse(fpath).getiterator("pair"):
+		if (subtree.get("id")[0:3] == "H27"):
+			t2 = forH26_H27(subtree)
+		else:
+			t2 = subtree.findtext("t2")
+
 		data.update({
 			subtree.get("id"):
 			{"label": subtree.get("label"),
 				"t1": subtree.findtext("t1"),
-				"t2": subtree.findtext("t2")}
+				"t2": t2}
 		})
 	return data
 
 # Split the paragraph into sentences
-def split2sentence(paragraph):
+def split2sent(paragraph):
 	res, sensp, merge = [], [], ""
 	opencnt, closecnt = 0, 0
 
@@ -37,31 +61,37 @@ def split2sentence(paragraph):
 
 # Get the each article in Civil Code 
 def getCivilCode():
+	"""
+	「漢数字 」は，条件の箇条書き→条文本文の続き?
+	「英数字 」は，～条の～のやつ
+	"""
 	civil = {}
 	fname = "../data/COLIEE-2017_Japanese_Training_Data/civil_japanese_utf8.txt"
 
 	with open(fname) as f:
 		for line in f:
-			jomatch = re.search(r'^第[〇一二三四五六七八九十百千]{1,6}条　', line)
-			# 「漢数字 」は，条件の箇条書き→条文本文の続き?
-			# 「英数字 」は，～条の～のやつ
-			jomatch = re.search(r'^[０-９]{1,2}　', line)
-			if res:
-				span = res.span()
-				# print("---------------------")
-				# print(line)
+			jopattern = r'^第[〇一二三四五六七八九十百千]{1,6}条(|の[〇一二三四五六七八九十百千]{1,4})　'
+			joMatch = re.search(jopattern, line)
+			koMatch = re.search(r'^[０-９]{1,2}　', line)
+			titleMatch = re.search(r'^（.+）$', line)
+			kajoMatch = re.search(r'[一二三四五六七八九十]{1,2}　', line)
+
+			if titleMatch:
+				title = line[1:-2]
+			if joMatch:
+				span = joMatch.span()
 				jonum, jobun = line[0:span[1]-1], line[span[1]:-1]
-				civil[jonum] = {"text":jobun}
+				civil[jonum] = {"title":title, "text":jobun}
+			if kajoMatch:
+				span = kajoMatch.span()
+				num, req = line[0:span[1]-1], line[span[1]:-1]
+				civil[jonum]["text"] += num + "," + req + "。"
+			if koMatch:
+				span = koMatch.span()
+				konum, jobun = line[0:span[1]-1], line[span[1]:-1]
+				civil[jonum][konum] = jobun
 
-	print(civil)	
-			# if /^([0-9０-９〇一二三四五六七八九十百千]{1,6}条の[0-9０-９〇一二三四五六七八九十百千]{1,2}|第[0-9０-９〇一二三四五六七八九十百千]{1,6}条)/ =~ line.chomp:
-			# 	jo = $&
-			# 	civil[jo] = ''
-			# 	jo_frg = 1
-			# elif (jo_frg == 1) and (l != "\n"):
-			# 	civil[jo] += str(line)
 	return civil
-
 
 # Get the clue representation
 def getClueRep(fpath):
@@ -79,7 +109,7 @@ def getClueRep(fpath):
 			if not line.split("\t")[0] in exceptlist:
 				cluerep += line.split("\t")[2].rstrip().split(",")
 	cluerep = list(set(cluerep))
-	cluerep.append("において")
+	cluerep += ("において", "時から")
 
 	for rep in cluerep:
 		pattern += rep+"|"
@@ -91,8 +121,8 @@ def rm(array):
 	return [x for x in array if x is not ""]
 
 # Split sentences into legal requirements and effects
-def split2reqeff(sent, pattern):
-	sentlist = re.split(r'、|または|又は|かつ|且つ|，', sent)	# split using rep
+def split2reqeff(sentence, pattern):
+	sentlist = re.split(r'、|または|又は|かつ|且つ|，', sentence)	# split using rep
 	sentlist = rm(sentlist)	# remove the ""
 	# sentlist = list(filter(lambda s:s != '', sentlist))	# remove the ""
 
@@ -124,7 +154,10 @@ def split2reqeff(sent, pattern):
 					pairs[prereq] += "、"+part
 			frg = 0
 
-	return pairs
+	if pairs == {}:
+		return sentence
+	else:
+		return pairs
 
 if __name__ == '__main__':
 	# data = {}
@@ -141,5 +174,5 @@ if __name__ == '__main__':
 	# egsent = "その行為が故意であった場合は、又は、知りながら無視した場合には、損害賠償請求権を無効とし、訴追権を与えるとする。"	# req,req→eff
 	# egsent = "訴追権を与えるとする。"	# eff (only)
 	# egsent = "その行為が故意であった場合には、"	# req (only)
-	pairs = split2reqeff(egsent, pattern)
+	# pairs = split2reqeff(egsent, pattern)
 
