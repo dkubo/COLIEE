@@ -8,7 +8,7 @@ def calcWMD(model, pair, civil):
 	"""
 	Calculate the WMDistance between Prob. and Civil Code
 	"""
-	totaldist, cnt = 0, 0
+	reqdist, effdist, cnt = 0, 0, 0
 	sent = []
 	# for cnt, (req, eff) in enumerate(pair.items()):
 	for req, eff in pair.items():
@@ -16,9 +16,10 @@ def calcWMD(model, pair, civil):
 		# t2内の各要件-効果ペアがそれぞれ閾値を超えたら正解？
 		# print(req, "-", eff)
 		mindist, minsent = calc(req, eff, civil)
-		totaldist += mindist
+		reqdist += mindist[0]
+		effdist += mindist[1]
 		sent.append(minsent)
-	return totaldist/cnt, sent
+	return (reqdist/cnt, effdist/cnt), sent
 
 def calc(req, eff, civil):
 	disthash = {}
@@ -29,7 +30,8 @@ def calc(req, eff, civil):
 				for reqcivil, effcivil in value.items():
 					dist1 = model.wmdistance(req, reqcivil)
 					dist2 = model.wmdistance(eff, effcivil)
-					disthash[(dist1+dist2)] = reqcivil+"-"+effcivil
+					disthash[(dist1, dist2)] = reqcivil+"-"+effcivil
+					# disthash[(dist1+dist2)] = reqcivil+"-"+effcivil
 						# print(dist1+dist2)
 						# print(reqcivil, "-", effcivil)
 
@@ -38,7 +40,7 @@ def calc(req, eff, civil):
 
 def eval(dist, ans):
 	print(dist)
-	if dist < 35:
+	if dist[0] < 20 and dist[1] < 20:
 		predict = "Y"
 	else:
 		predict = "N"
@@ -95,23 +97,29 @@ if __name__ == '__main__':
 	for probid, v in taskdata.items():
 		sentences = data.split2sent(v["t2"])
 		ans = v["label"]
-		totaldist = 0
+		reqdist, effdist, cnt = 0, 0, 0
 		buf = []
 		for sentence in sentences:
 			pair = data.split2reqeff(sentence, pattern)
 
 			# Calculate the WMD
 			if type(pair) == dict:
+				cnt += 1
 				mindist, minsent = calcWMD(model, pair, civil)
-				totaldist += mindist
+				reqdist += mindist[0]
+				effdist += mindist[1]
+				print("--------------")
+				print("--------------")
+				print(pair)
+				print(reqdist, effdist, cnt)
 				buf += minsent
-		if totaldist != 0:
+		if reqdist != 0 and effdist != 0:
 			probnum += 1
 			print("--------------")
 			print(probid, v["label"])
 			print(sentences)
 			print(buf)
-			correct += eval(totaldist, ans)
+			correct += eval((reqdist/cnt, effdist/cnt), ans)
 
 	print("--------------")
 	print("correct, probnum:", str(correct), str(probnum))
